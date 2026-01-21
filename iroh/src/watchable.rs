@@ -327,10 +327,16 @@ impl<T: Clone> Shared<T> {
             }
         }
 
-        self.watchers
-            .lock()
-            .expect("poisoned")
-            .push_back(cx.waker().to_owned());
+        let mut watchers = self.watchers.lock().expect("poisoned");
+
+        let in_queue = watchers
+            .iter()
+            .any(|existing| existing.will_wake(cx.waker()));
+
+        if !in_queue {
+            watchers.push_back(cx.waker().to_owned());
+        }
+        drop(watchers);
 
         #[cfg(iroh_loom)]
         loom::thread::yield_now();
